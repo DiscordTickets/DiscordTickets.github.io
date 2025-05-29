@@ -1,20 +1,20 @@
 (function () {
   var previewForm = document.getElementById("previewform");
 
-  // Get the query string (everything after the '?') and clean it.
-  var q = location.search.substring(1).trim();
-  // Remove any trailing & or ? characters that might cause issues.
-  q = q.replace(/[&?]+$/, "");
+  // Get the entire query from the URL—even if it contains multiple '?' characters.
+  // This avoids issues with the browser splitting off extra query parameters.
+  var q = window.location.href.split('?').slice(1).join('?').trim();
 
-  // Ensure that only .txt files are allowed.
+  // Make sure we have a URL that ends in .txt (allowing for additional query parameters)
   if (!q.match(/\.txt(\?.*)?$/i)) {
     previewForm.style.display = "block";
     previewForm.innerText = "Error: Only .txt files are supported.";
     return;
   }
   var url = q;
+  console.log("Fetching URL:", url);
 
-  // Fetch the TXT file (which by definition contains raw HTML)
+  // Fetch the .txt file (which contains raw HTML).
   fetch(url)
     .then(function (response) {
       if (!response.ok) {
@@ -23,14 +23,17 @@
       return response.text();
     })
     .then(function (data) {
-      // Since every .txt file has raw HTML, inject a <base> tag so relative links resolve correctly.
-      var htmlContent = data.replace(/<head([^>]*)>/i, '<head$1><base href="' + url + '">')
-                            // Rewrite inline scripts as in the original logic.
-                            .replace(
-                              /<script(\s*src=["'][^"']*["'])?(\s*type=["'](text|application)\/javascript["'])?/gi,
-                              "<script type='text/htmlpreview'$1"
-                            );
-      // Write the fetched HTML into the document.
+      // Insert a <base> tag in the <head> so that relative asset URLs resolve correctly.
+      // Also, rewrite inline scripts (if needed) to mimic the original behavior.
+      var htmlContent = data.replace(
+        /<head([^>]*)>/i,
+        '<head$1><base href="' + url + '">'
+      ).replace(
+        /<script(\s*src=["'][^"']*["'])?(\s*type=["'](text|application)\/javascript["'])?/gi,
+        "<script type='text/htmlpreview'$1"
+      );
+      
+      // Render the HTML by writing it into the document.
       setTimeout(function () {
         document.open();
         document.write(htmlContent);
