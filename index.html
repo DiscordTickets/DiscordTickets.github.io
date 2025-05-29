@@ -1,36 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Discord Tickets</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiscordTickets HTML Viewer</title>
 </head>
 <body>
-  <div id="content">Loading ticket content...</div>
+  <div id="content">
+    <p>Loading…</p>
+  </div>
+
   <script>
-    (async function() {
+    (function() {
+      // Extract everything after the '?' in the URL. Our assumption is that the visitor will go to:
+      // https://discordtickets.github.io?https://cdn.discordapp.com/attachments/…message.txt?[...]
       const rawQuery = window.location.search.substring(1);
-      const discordUrl = decodeURIComponent(rawQuery);
-  
-      if (!discordUrl) {
-        document.getElementById('content').textContent = "No Discord URL provided.";
+      if (!rawQuery) {
+        document.getElementById("content").innerHTML = "<p>No URL provided in query string.</p>";
         return;
       }
-  
+
+      // Decode the query string: this will be your target .txt file URL
+      const targetUrl = decodeURIComponent(rawQuery);
+
+      // Validate that targetUrl is a valid URL and points to a .txt file.
       try {
-        const proxyUrl = `https://discord-proxy-ml6wxu8gd-tests-projects-c8c5d462.vercel.app/api/proxy?url=${encodeURIComponent(discordUrl)}`;
-        const response = await fetch(proxyUrl);
-  
-        if (!response.ok) {
-          document.getElementById('content').textContent = "Error: " + response.status;
+        const urlObj = new URL(targetUrl);
+        if (!urlObj.pathname.endsWith(".txt")) {
+          document.getElementById("content").innerHTML = "<p>Provided URL is not a .txt file.</p>";
           return;
         }
-  
-        const text = await response.text();
-        document.getElementById('content').textContent = text;
-      } catch (err) {
-        console.error("Fetching error:", err);
-        document.getElementById('content').textContent = "Failed to fetch content.";
+      } catch (e) {
+        document.getElementById("content").innerHTML = "<p>Invalid URL provided.</p>";
+        return;
       }
+
+      // Replace the following with the actual URL where your Vercel proxy is deployed.
+      // For example: 'https://discord-proxy-yourusername.vercel.app'
+      const proxyBaseUrl = "https://your-vercel-proxy.vercel.app";
+
+      // Build the full proxy endpoint URL with our "url" query parameter
+      const proxyUrl = `${proxyBaseUrl}/api/proxy?url=` + encodeURIComponent(targetUrl);
+
+      // Fetch the content from the proxy endpoint.
+      fetch(proxyUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok.");
+          }
+          return response.text();
+        })
+        .then(html => {
+          // Insert the remote HTML into our page
+          document.getElementById("content").innerHTML = html;
+        })
+        .catch(err => {
+          document.getElementById("content").innerHTML = "<p>Error fetching content: " + err.message + "</p>";
+        });
     })();
   </script>
 </body>
