@@ -1,9 +1,15 @@
 (function () {
   var previewForm = document.getElementById("previewform");
 
-  // Determine the URL parameter from the query string.
+  // Get the query string from the URL – everything after the '?'.
   var q = location.search.substring(1);
+
+  // Clean up trailing ampersands or question marks that might cause fetch issues.
+  q = q.replace(/[&?]+$/, "");
+
   var url;
+  // Determine the URL source: if it's from Discord attachments use it directly,
+  // or convert GitHub URLs as before.
   if (q.indexOf("cdn.discordapp.com/attachments/") !== -1) {
     url = q;
   } else if (q.indexOf("github.com") !== -1) {
@@ -12,7 +18,7 @@
     url = q;
   }
 
-  // Function to inject plain text into the document inside a <pre> block.
+  // Function to inject plain text (wrapped in <pre>) into the document.
   var loadText = function (data) {
     document.open();
     document.write(
@@ -26,7 +32,7 @@
     document.close();
   };
 
-  // Function to inject HTML into the document. This adds a <base> tag and rewrites inline scripts.
+  // Function to inject HTML into the document. Adds a <base> tag and rewrites inline script types.
   var loadHTML = function (data) {
     if (data) {
       data = data
@@ -44,14 +50,14 @@
     }
   };
 
-  // Function to rewrite asset URLs (for iframes, anchor links, CSS, and scripts) so that subsequent
-  // resource requests are routed through the same CORS proxy if needed.
+  // Function to rewrite asset URLs (iframes, anchor links, CSS, and scripts) so that subsequent
+  // resource requests are correctly proxied if needed.
   var replaceAssets = function () {
     var frame, a, link, links = [], script, scripts = [], i, href, src;
 
     if (document.querySelectorAll("frameset").length) return;
 
-    // Process frames/iframes.
+    // Rewriting iframe and frame sources.
     frame = document.querySelectorAll("iframe[src],frame[src]");
     for (i = 0; i < frame.length; ++i) {
       src = frame[i].src;
@@ -64,7 +70,7 @@
       }
     }
 
-    // Process anchor tags.
+    // Rewriting anchor tags.
     a = document.querySelectorAll("a[href]");
     for (i = 0; i < a.length; ++i) {
       href = a[i].href;
@@ -81,7 +87,7 @@
       }
     }
 
-    // Process stylesheets.
+    // Linking external stylesheets.
     link = document.querySelectorAll("link[rel=stylesheet]");
     for (i = 0; i < link.length; ++i) {
       href = link[i].href;
@@ -99,7 +105,7 @@
       }
     });
 
-    // Process scripts.
+    // Rewriting and loading scripts.
     script = document.querySelectorAll('script[type="text/htmlpreview"]');
     for (i = 0; i < script.length; ++i) {
       src = script[i].src;
@@ -123,7 +129,7 @@
     });
   };
 
-  // Inject CSS dynamically.
+  // Function to inject CSS into the document.
   var loadCSS = function (data) {
     if (data) {
       var style = document.createElement("style");
@@ -132,7 +138,7 @@
     }
   };
 
-  // Inject JavaScript dynamically.
+  // Function to inject JavaScript into the document.
   var loadJS = function (data) {
     if (data) {
       var script = document.createElement("script");
@@ -141,7 +147,7 @@
     }
   };
 
-  // Fetch function that attempts a direct fetch and falls back to a CORS proxy if needed.
+  // fetchProxy: Attempts a direct fetch first and falls back to a CORS proxy if necessary.
   var fetchProxy = function (url, options, i) {
     var proxy = ["", "https://api.codetabs.com/v1/proxy/?quest="];
     return fetch(proxy[i] + url, options)
@@ -156,9 +162,9 @@
       });
   };
 
-  // Main execution: If the URL is from an external source, fetch it.
+  // Main execution: If the URL is external, fetch it.
   if (url && url.indexOf(location.hostname) < 0) {
-    // For Discord attachments ending in .txt:
+    // For Discord attachments ending with .txt:
     if (url.indexOf("cdn.discordapp.com/attachments/") !== -1 && url.match(/\.txt(\?.*)?$/)) {
       fetch(url)
         .then(function (response) {
@@ -169,21 +175,20 @@
         })
         .then(function (data) {
           var trimmed = data.trim();
-          // If the file content appears to be HTML, process it as HTML.
+          // If the file content looks like HTML, process it as HTML.
           if (/^<!doctype html>/i.test(trimmed) || /^<html/i.test(trimmed)) {
             loadHTML(data);
           } else {
-            // Otherwise, treat it as plain text.
             loadText(data);
           }
         })
         .catch(function (error) {
-          console.error("An error occurred:", error);
+          console.error("An error occurred during the Discord fetch:", error);
           previewForm.style.display = "block";
           previewForm.innerText = error;
         });
     } else {
-      // For all other URLs, use the CORS proxy and treat the content as HTML.
+      // For other URLs, use the proxy fetch.
       fetchProxy(url, null, 0)
         .then(loadHTML)
         .catch(function (error) {
