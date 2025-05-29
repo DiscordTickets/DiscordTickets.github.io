@@ -4,64 +4,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DiscordTickets HTML Viewer</title>
+  <style>
+    html, body, iframe { width: 100%; height: 100%; margin: 0; padding: 0; }
+  </style>
 </head>
 <body>
-  <div id="content">
-    <p>Loading…</p>
-  </div>
+  <iframe id="proxy-iframe" frameborder="0"></iframe>
 
   <script>
     (function() {
       const params = new URLSearchParams(window.location.search);
       let targetUrl = params.get("url");
-
-      console.log("Raw targetUrl parameter:", targetUrl);
-
       if (!targetUrl) {
-        document.getElementById("content").innerHTML =
-          "<p>No URL provided in query string. Please pass the txt file URL as the 'url' parameter.</p>";
+        document.body.innerHTML = "<p>No URL provided in query string.</p>";
         return;
       }
-
+      
+      // Clean the URL (remove trailing ampersands, etc.)
       targetUrl = targetUrl.trim();
       while (targetUrl.endsWith("&")) {
         targetUrl = targetUrl.slice(0, -1);
       }
-      console.log("Cleaned targetUrl:", targetUrl);
 
-      let urlObj;
+      // Validate it's a .txt file URL
       try {
-        urlObj = new URL(targetUrl);
+        const urlObj = new URL(targetUrl);
+        if (!urlObj.pathname.endsWith(".txt")) {
+          document.body.innerHTML = "<p>The provided URL does not point to a .txt file.</p>";
+          return;
+        }
       } catch (e) {
-        console.error("Error parsing URL:", targetUrl, e);
-        document.getElementById("content").innerHTML = "<p>Invalid URL provided.</p>";
-        return;
-      }
-      if (!urlObj.pathname.endsWith(".txt")) {
-        document.getElementById("content").innerHTML =
-          "<p>The provided URL does not point to a .txt file.</p>";
+        document.body.innerHTML = "<p>Invalid URL provided.</p>";
         return;
       }
 
+      // Build the proxy URL (update this with your actual proxy base)
       const proxyBaseUrl = "https://discord-proxy-jet.vercel.app";
       const proxyUrl = `${proxyBaseUrl}/api/proxy?url=` + encodeURIComponent(targetUrl);
-      console.log("Fetching from proxy URL:", proxyUrl);
 
-      fetch(proxyUrl)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("Network response was not ok. Status: " + response.status);
-          }
-          return response.text();
-        })
-        .then(html => {
-          document.getElementById("content").innerHTML = html;
-        })
-        .catch(err => {
-          document.getElementById("content").innerHTML =
-            "<p>Error fetching content: " + err.message + "</p>";
-          console.error(err);
-        });
+      // Set the iframe's source to the proxy URL
+      document.getElementById("proxy-iframe").src = proxyUrl;
     })();
   </script>
 </body>
