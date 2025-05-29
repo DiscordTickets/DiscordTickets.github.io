@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiscordTickets Viewer</title>
+</head>
+<body>
+    <div id="content">Loading content...</div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const rawUrl = urlParams.get("url");
+
+        if (rawUrl) {
+            fetch(rawUrl)
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById("content").innerHTML = html;
+                })
+                .catch(error => {
+                    console.error("Error fetching content:", error);
+                    document.getElementById("content").textContent = "Failed to load content.";
+                });
+        } else {
+            document.getElementById("content").textContent = "No URL provided.";
+        }
+    </script>
+</body>
+</html>
