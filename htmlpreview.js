@@ -115,7 +115,7 @@
         }
     };
 
-    // This function fetches data from a URL using a proxy if needed.
+    // Modified fetchProxy that downloads as a Blob then converts to text.
     var fetchProxy = function (url, options, i) {
         var proxy = [
             '', // try fetching without a proxy first.
@@ -124,7 +124,19 @@
         return fetch(proxy[i] + url, options).then(function (res) {
             if (!res.ok)
                 throw new Error('Cannot load ' + url + ': ' + res.status + ' ' + res.statusText);
-            return res.text();
+            // Instead of calling res.text() immediately,
+            // read the content as a Blob first.
+            return res.blob();
+        }).then(function(blob) {
+            // Use FileReader to convert blob to text.
+            return new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onload = function() {
+                    resolve(reader.result);
+                };
+                reader.onerror = reject;
+                reader.readAsText(blob);
+            });
         }).catch(function (error) {
             if (i === proxy.length - 1)
                 throw error;
