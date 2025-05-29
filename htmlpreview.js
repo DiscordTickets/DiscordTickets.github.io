@@ -2,57 +2,59 @@
     
     var previewForm = document.getElementById('previewform');
 
-    // Get the URL from the query string.
-    // For GitHub URLs, transform them to raw.githubusercontent.com.
-    var url = location.search.substring(1)
-              .replace(/\/\/github\.com/, '//raw.githubusercontent.com')
-              .replace(/\/blob\//, '/');
+    // Get the query string – for example, a URL from Discord or GitHub.
+    var q = location.search.substring(1);
+    var url;
+    
+    // If the URL is from Discord attachments, use it as is.
+    // Otherwise, if it’s a GitHub URL, convert to the "raw" link.
+    if (q.indexOf('cdn.discordapp.com/attachments/') !== -1) {
+        url = q;
+    } else if (q.indexOf('github.com') !== -1) {
+        url = q.replace(/\/\/github\.com/, '//raw.githubusercontent.com').replace(/\/blob\//, '/');
+    } else {
+        url = q;
+    }
 
+    // Function to replace asset URLs inside the loaded HTML.
     var replaceAssets = function () {
         var frame, a, link, links = [], script, scripts = [], i, href, src;
         
-        // Do nothing for framesets because document.write() will erase things.
-        if (document.querySelectorAll('frameset').length)
-            return;
-        
-        // Process frames (iframe and frame elements).
+        // If the document has a frameset, skip asset replacement
+        if (document.querySelectorAll('frameset').length) return;
+
+        // Process iframes and frames: if their src comes from our supported hosts
         frame = document.querySelectorAll('iframe[src],frame[src]');
         for (i = 0; i < frame.length; ++i) {
-            src = frame[i].src; // Get absolute URL
-            // Check if the URL comes from GitHub, Bitbucket, or Discord.
+            src = frame[i].src;
             if (src.indexOf('//raw.githubusercontent.com') > 0 ||
                 src.indexOf('//bitbucket.org') > 0 ||
-                src.indexOf('discordapp.com') > 0) {
-                // Rewrite the source URL so it loads using the CORS proxy.
+                src.indexOf('cdn.discordapp.com') > 0) {
                 frame[i].src = '//' + location.hostname + location.pathname + '?' + src;
             }
         }
         
-        // Process anchor links.
+        // Process anchor tags: rewriting anchors and links to HTML files as needed.
         a = document.querySelectorAll('a[href]');
         for (i = 0; i < a.length; ++i) {
             href = a[i].href;
             if (href.indexOf('#') > 0) {
-                // For anchors, rewrite to support empty anchors.
                 a[i].href = '//' + location.hostname + location.pathname + location.search + '#' + a[i].hash.substring(1);
-            } else if (
-                (href.indexOf('//raw.githubusercontent.com') > 0 ||
-                 href.indexOf('//bitbucket.org') > 0 ||
-                 href.indexOf('discordapp.com') > 0) &&
-                (href.indexOf('.html') > 0 || href.indexOf('.htm') > 0)
-            ) {
-                // For links to other HTML pages on these hosts, rewrite URL through the proxy.
+            } else if ((href.indexOf('//raw.githubusercontent.com') > 0 ||
+                       href.indexOf('//bitbucket.org') > 0 ||
+                       href.indexOf('cdn.discordapp.com') > 0) &&
+                       (href.indexOf('.html') > 0 || href.indexOf('.htm') > 0)) {
                 a[i].href = '//' + location.hostname + location.pathname + '?' + href;
             }
         }
         
-        // Process stylesheets.
+        // Process linked stylesheets from known hosts.
         link = document.querySelectorAll('link[rel=stylesheet]');
         for (i = 0; i < link.length; ++i) {
             href = link[i].href;
             if (href.indexOf('//raw.githubusercontent.com') > 0 ||
                 href.indexOf('//bitbucket.org') > 0 ||
-                href.indexOf('discordapp.com') > 0) {
+                href.indexOf('cdn.discordapp.com') > 0) {
                 links.push(fetchProxy(href, null, 0));
             }
         }
@@ -62,34 +64,33 @@
             }
         });
         
-        // Process scripts. Scripts using type="text/htmlpreview" are loaded via proxy.
+        // Process scripts marked with a custom type.
         script = document.querySelectorAll('script[type="text/htmlpreview"]');
         for (i = 0; i < script.length; ++i) {
             src = script[i].src;
-            if (src.indexOf('//raw.githubusercontent.com') > 0 ||
-                src.indexOf('//bitbucket.org') > 0 ||
-                src.indexOf('discordapp.com') > 0) {
+            if (src && (src.indexOf('//raw.githubusercontent.com') > 0 ||
+                        src.indexOf('//bitbucket.org') > 0 ||
+                        src.indexOf('cdn.discordapp.com') > 0)) {
                 scripts.push(fetchProxy(src, null, 0));
             } else {
                 script[i].removeAttribute('type');
-                scripts.push(script[i].innerHTML);
+                scripts.push(Promise.resolve(script[i].innerHTML));
             }
         }
         Promise.all(scripts).then(function (res) {
             for (i = 0; i < res.length; ++i) {
                 loadJS(res[i]);
             }
-            // Dispatch a fake DOMContentLoaded event after scripts are loaded.
             document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
         });
     };
 
+    // Load fetched HTML, injecting a <base> tag and converting inline script types.
     var loadHTML = function (data) {
         if (data) {
-            // Inject a <base> tag in the <head> so that relative URLs work,
-            // and replace script tags to use a temporary type.
             data = data.replace(/<head([^>]*)>/i, '<head$1><base href="' + url + '">')
-                       .replace(/<script(\s*src=["'][^"']*["'])?(\s*type=["'](text|application)\/javascript["'])?/gi, '<script type="text/htmlpreview"$1');
+                       .replace(/<script(\s*src=["'][^"']*["'])?(\s*type=["'](text|application)\/javascript["'])?/gi,
+                                '<script type="text/htmlpreview"$1');
             setTimeout(function () {
                 document.open();
                 document.write(data);
@@ -99,6 +100,7 @@
         }
     };
 
+    // Inject CSS into the document's head.
     var loadCSS = function (data) {
         if (data) {
             var style = document.createElement('style');
@@ -107,6 +109,7 @@
         }
     };
 
+    // Inject JavaScript into the document's body.
     var loadJS = function (data) {
         if (data) {
             var script = document.createElement('script');
@@ -115,28 +118,16 @@
         }
     };
 
-    // Modified fetchProxy that downloads as a Blob then converts to text.
+    // A simple proxy fetch function that optionally falls back to a CORS proxy.
     var fetchProxy = function (url, options, i) {
         var proxy = [
-            '', // try fetching without a proxy first.
-            'https://api.codetabs.com/v1/proxy/?quest=' // second option using CodeTabs proxy.
+            '', // try without proxy first
+            'https://api.codetabs.com/v1/proxy/?quest='
         ];
         return fetch(proxy[i] + url, options).then(function (res) {
             if (!res.ok)
                 throw new Error('Cannot load ' + url + ': ' + res.status + ' ' + res.statusText);
-            // Instead of calling res.text() immediately,
-            // read the content as a Blob first.
-            return res.blob();
-        }).then(function(blob) {
-            // Use FileReader to convert blob to text.
-            return new Promise(function(resolve, reject) {
-                var reader = new FileReader();
-                reader.onload = function() {
-                    resolve(reader.result);
-                };
-                reader.onerror = reject;
-                reader.readAsText(blob);
-            });
+            return res.text();
         }).catch(function (error) {
             if (i === proxy.length - 1)
                 throw error;
@@ -144,8 +135,7 @@
         });
     };
 
-    // If a valid URL is provided and it’s not already on our domain, fetch and load it;
-    // otherwise, show the preview form (for error messages, etc.).
+    // If the URL is valid and not from our own domain, try to fetch it.
     if (url && url.indexOf(location.hostname) < 0)
         fetchProxy(url, null, 0).then(loadHTML).catch(function (error) {
             console.error(error);
