@@ -3,30 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DiscordTickets HTML Viewer</title>
+  <title>DiscordTickets Text Viewer</title>
   <style>
-    html, body, iframe { width: 100%; height: 100%; margin: 0; padding: 0; }
+    html, body, pre {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 10px;
+      font-family: monospace;
+      overflow: auto;
+      box-sizing: border-box;
+      background: #f4f4f4;
+      color: #333;
+    }
   </style>
 </head>
 <body>
-  <iframe id="proxy-iframe" frameborder="0"></iframe>
+  <pre id="content">Loading...</pre>
 
   <script>
     (function() {
+      // Get the "url" parameter from the query string.
       const params = new URLSearchParams(window.location.search);
       let targetUrl = params.get("url");
       if (!targetUrl) {
         document.body.innerHTML = "<p>No URL provided in query string.</p>";
         return;
       }
-      
+
       // Clean the URL (remove trailing ampersands, etc.)
       targetUrl = targetUrl.trim();
       while (targetUrl.endsWith("&")) {
         targetUrl = targetUrl.slice(0, -1);
       }
 
-      // Validate it's a .txt file URL
+      // Validate that it's a .txt file URL.
       try {
         const urlObj = new URL(targetUrl);
         if (!urlObj.pathname.endsWith(".txt")) {
@@ -38,12 +49,24 @@
         return;
       }
 
-      // Build the proxy URL (update this with your actual proxy base)
+      // Build the proxy URL (update this with your actual proxy base if needed)
       const proxyBaseUrl = "https://discord-proxy-jet.vercel.app";
       const proxyUrl = `${proxyBaseUrl}/api/proxy?url=` + encodeURIComponent(targetUrl);
 
-      // Set the iframe's source to the proxy URL
-      document.getElementById("proxy-iframe").src = proxyUrl;
+      // Fetch the content from the proxy URL and display it
+      fetch(proxyUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network error');
+          }
+          return response.text();
+        })
+        .then(data => {
+          document.getElementById("content").textContent = data;
+        })
+        .catch(error => {
+          document.getElementById("content").textContent = "Error loading content: " + error.message;
+        });
     })();
   </script>
 </body>
